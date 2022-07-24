@@ -1,4 +1,4 @@
-package example
+package main
 
 import rl "vendor:raylib"
 import "core:fmt"
@@ -19,12 +19,12 @@ OutputFormat :: enum {
 
 Frame :: struct {
     placements: [dynamic]rl.Vector2,
-    rotations: [dynamic]f32
+    rotations: [dynamic]f32,
 }
 
 Settings :: struct {
-    screenWidth: i32,
-    screenHeight: i32,
+    screenWidth: int,
+    screenHeight: int,
 }
 
 NameAndTexture :: struct {
@@ -36,7 +36,8 @@ Editor :: struct {
     settings: ^Settings,
     camera: ^rl.Camera2D,
     activeTool: Tool,
-    activeFrame: i32,
+    activeFrame: int,
+    activeAsset: int,
     scrollBarPosition_t: f32,
     frames: [dynamic]^Frame,
     assets: [dynamic]NameAndTexture,
@@ -65,18 +66,23 @@ loadSettings :: proc() -> Settings {
     }
 }
 
+makeCamera :: proc() -> rl.Camera2D {
+    camera: rl.Camera2D
+    camera.target.x = 0
+    camera.target.y = 0
+    camera.offset.x = 0
+    camera.offset.y = 0
+    camera.zoom = 1
+    return camera
+}
+
 main :: proc() {
     // rl.SetWindowState(auto_cast rl.ConfigFlag.WINDOW_RESIZABLE)
     editor: Editor
-    camera: rl.Camera2D
-    // camera.target.x = 0
-    // camera.target.y = 0
-    // camera.offset.x = 0
-    // camera.offset.y = 0
-    // camera.zoom = 1
+    camera := makeCamera()
     settings := loadSettings()
     rl.SetTargetFPS(60)
-	rl.InitWindow(settings.screenWidth, settings.screenHeight, "AnimPosition")
+	rl.InitWindow(auto_cast settings.screenWidth, auto_cast settings.screenHeight, "AnimPosition")
     placementTexture = rl.LoadTexture("Assets/placement.png")
     rotationTexture = rl.LoadTexture("Assets/rotation.png")
 
@@ -85,9 +91,8 @@ main :: proc() {
     editor.activeTool = .MOVE
     editor.settings = &settings
     editor.camera = &camera
-    append(&editor.frames, newFrame(len(editor.assets)));
-    
     append(&editor.assets, NameAndTexture{name = "Placement", texture = &placementTexture})
+    append(&editor.frames, newFrame(len(editor.assets)));
 
 	for !rl.WindowShouldClose() {
         render(&editor)
@@ -98,11 +103,11 @@ main :: proc() {
 	rl.CloseWindow()
 }
 
-toolBarWidth :: proc(editor: ^Editor) -> i32 {
+toolBarWidth :: proc(editor: ^Editor) -> int {
     return editor.settings.screenWidth / 24
 }
 
-frameBarHeight :: proc(editor: ^Editor) -> i32 {
+frameBarHeight :: proc(editor: ^Editor) -> int {
     return editor.settings.screenHeight / 4
 }
  
@@ -113,13 +118,13 @@ renderToolbar :: proc(editor: ^Editor) {
     toolWidth, toolHeight := sidebarWidth - 4, sidebarWidth - 4
     rectangle := rl.Rectangle{ x = auto_cast (settings.screenWidth - sidebarWidth), y = 0, width = auto_cast sidebarWidth, height = auto_cast (TOOL_COUNT * toolHeight + 6) } 
     x := rectangle.x + 2
-    y: i32 = 2
+    y: int = 2
     rl.DrawRectangle(auto_cast rectangle.x, auto_cast rectangle.y, auto_cast rectangle.width, auto_cast rectangle.height, rl.BLACK)
     for t in Tool {
         if t == editor.activeTool {
-            rl.DrawRectangle(auto_cast x, auto_cast y, toolWidth, toolHeight, rl.WHITE)
+            rl.DrawRectangle(auto_cast x, auto_cast y, auto_cast toolWidth, auto_cast toolHeight, rl.WHITE)
         } else {
-            rl.DrawRectangle(auto_cast x, auto_cast y, toolWidth, toolHeight, rl.GRAY)
+            rl.DrawRectangle(auto_cast x, auto_cast y, auto_cast toolWidth, auto_cast toolHeight, rl.GRAY)
         }
         drawTool(t, auto_cast x, auto_cast y)
         y += toolHeight + 2
@@ -162,7 +167,7 @@ render :: proc(editor: ^Editor) {
 renderFrameBar :: proc(editor: ^Editor) {
     frameBarHeight := frameBarHeight(editor)
     settings := editor.settings
-    rl.DrawRectangle(0, settings.screenHeight - frameBarHeight, settings.screenWidth, frameBarHeight, rl.BLUE)
+    rl.DrawRectangle(0, auto_cast (settings.screenHeight - frameBarHeight), auto_cast settings.screenWidth, auto_cast frameBarHeight, rl.BLUE)
 
     X_OFFSET :: 12
     yOffset := 6 + settings.screenHeight - frameBarHeight 
@@ -173,7 +178,7 @@ renderFrameBar :: proc(editor: ^Editor) {
     currentY := yOffset + ROW_HEIGHT
     for asset in editor.assets {
         rl.DrawRectangleLines(X_OFFSET, auto_cast currentY, ROW_WIDTH, ROW_HEIGHT, rl.WHITE)
-        rl.DrawText(asset.name, X_OFFSET + 4, currentY + 2, 12, rl.WHITE)
+        rl.DrawText(asset.name, auto_cast (X_OFFSET + 4), auto_cast (currentY + 2), 12, rl.WHITE)
         currentY := ROW_HEIGHT
     }
 
@@ -182,19 +187,61 @@ renderFrameBar :: proc(editor: ^Editor) {
     for frame, index in editor.frames {
         rl.DrawRectangleLines(auto_cast (X_OFFSET + ROW_WIDTH + ROW_WIDTH * index), auto_cast currentY, ROW_WIDTH, ROW_HEIGHT, rl.WHITE)
         strings.write_int(&builder, index + 1)
-        rl.DrawText(strings.clone_to_cstring(strings.to_string(builder)), auto_cast (X_OFFSET + ROW_WIDTH * 1.5 + ROW_WIDTH * index), yOffset + 2, 12, rl.WHITE)
+        rl.DrawText(strings.clone_to_cstring(strings.to_string(builder)), auto_cast (X_OFFSET + ROW_WIDTH * 1.5 + ROW_WIDTH * index), auto_cast(yOffset + 2), 12, rl.WHITE)
         strings.reset_builder(&builder)
+
+        assert(len(frame.placements) == len(frame.rotations))
+        currentY += ROW_HEIGHT
+        for i := 0; i < len(frame.placements); i += 1 {
+            currentX: i32 = auto_cast (X_OFFSET + ROW_WIDTH + ROW_WIDTH * index)
+            rl.DrawRectangleLines(currentX, auto_cast currentY, ROW_WIDTH, ROW_HEIGHT, rl.WHITE)
+            strings.write_int(&builder, auto_cast frame.placements[i].x)
+            strings.write_string_builder(&builder, ", ")
+            strings.write_int(&builder, auto_cast frame.placements[i].y)
+            strings.write_string_builder(&builder, "    ")
+            strings.write_int(&builder, auto_cast frame.rotations[i])
+            rl.DrawText(strings.clone_to_cstring(strings.to_string(builder)), currentX + 6, auto_cast currentY + 2, 12, rl.WHITE)
+
+            currentY += ROW_HEIGHT
+        }
+        currentY = yOffset
     }
 }
 
 renderMainView :: proc(editor: ^Editor) {
+    activeFrame := editor.activeFrame
+    for asset, index in editor.assets {
+        placement := editor.frames[activeFrame].placements[index]
+        rotation := editor.frames[activeFrame].rotations[index]
+        fmt.println(placement, rotation, asset.name)
+        rl.DrawTexturePro(
+            asset.texture^,
+            rl.Rectangle{
+                x = 0, y = 0, width = auto_cast asset.texture.width, height = auto_cast asset.texture.height
+            },
+            rl.Rectangle{
+                x = placement.x, y = placement.y, width = auto_cast asset.texture.width, height = auto_cast asset.texture.height
+            },
+            rl.Vector2{0,0},
+            rotation,
+            rl.WHITE
+        )
+        rl.DrawTexture(asset.texture^, 0, 0, rl.WHITE)
+    }
+}
 
+removeFrame :: proc(editor: ^Editor) {
+    if editor.activeFrame >= len(editor.frames) do editor.activeFrame -= 1
 }
 
 input :: proc(editor: ^Editor) {
     if toolBarSelection(editor) do return
     if frameEditing(editor) do return
     rl.SetMouseOffset(auto_cast editor.camera.target.x, auto_cast editor.camera.target.y)
+
+    for asset in editor.assets {
+        
+    }
 
     rl.SetMouseOffset(0, 0)
 }
@@ -206,7 +253,7 @@ toolBarSelection :: proc(editor: ^Editor) -> bool {
     sidebarWidth := toolBarWidth(editor) 
     toolWidth, toolHeight := sidebarWidth - 4, sidebarWidth - 4
     x := (settings.screenWidth - sidebarWidth) + 2
-    y: i32 = 2
+    y: int = 2
 
     for t in Tool {
         if rl.CheckCollisionPointRec(mousePosition, rl.Rectangle{
